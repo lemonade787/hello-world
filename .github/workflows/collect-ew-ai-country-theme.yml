@@ -8,6 +8,10 @@ on:
       - scripts/collect_openalex_raw.py
       - .github/workflows/collect-ew-ai-country-theme.yml
 
+concurrency:
+  group: ew-ai-country-theme-collection
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
