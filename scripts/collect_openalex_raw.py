@@ -7,6 +7,7 @@ import requests
 API = 'https://api.openalex.org/works'
 START = '2000-01-01'
 CUTOFF = '2026-09-01'
+MAX_PAGES_PER_QUERY = 20  # 4,000 works/query; truncation is recorded explicitly.
 THEME_QUERIES = {
  'K1': ['machine learning spectrum sensing','deep learning spectrum sensing','radio frequency anomaly detection','spectrum situational awareness artificial intelligence','RF signal detection neural network'],
  'K2': ['radar signal deinterleaving deep learning','specific emitter identification deep learning','radio frequency fingerprinting machine learning','radar emitter identification artificial intelligence','pulse sorting neural network radar'],
@@ -35,14 +36,14 @@ def get(session, params, retries=8):
 def main():
     out=Path(sys.argv[1] if len(sys.argv)>1 else 'output'); out.mkdir(parents=True,exist_ok=True)
     email=os.getenv('OPENALEX_EMAIL','research@example.com')
-    s=requests.Session(); s.headers.update({'User-Agent':f'EW-AI-country-theme/1.0 (mailto:{email})','Accept':'application/json'})
+    s=requests.Session(); s.headers.update({'User-Agent':f'EW-AI-country-theme/1.1 (mailto:{email})','Accept':'application/json'})
     records={}; audit=[]
     for tid,queries in THEME_QUERIES.items():
         for q in queries:
             cursor='*'; pages=0; retrieved=0; reported=None; err=''; truncated=False
             print(f'COLLECT {tid}: {q}',flush=True)
             try:
-                for page in range(1,61):
+                for page in range(1,MAX_PAGES_PER_QUERY+1):
                     payload=get(s,{
                       'search':q,
                       'filter':f'from_publication_date:{START},to_publication_date:{CUTOFF}',
@@ -62,18 +63,19 @@ def main():
                         if hit not in rec['_query_hits']: rec['_query_hits'].append(hit)
                     cursor=payload.get('meta',{}).get('next_cursor')
                     if not cursor: break
-                    time.sleep(.12)
-                else: truncated=True
+                    time.sleep(.08)
+                if cursor and reported is not None and retrieved < reported:
+                    truncated=True
             except Exception as e:
                 err=f'{type(e).__name__}: {e}'
                 print('ERROR',tid,q,err,file=sys.stderr,flush=True)
-            audit.append({'theme_id':tid,'query':q,'reported_count':reported,'retrieved':retrieved,'pages':pages,'truncated':truncated,'error':err})
-            print(f'  -> {retrieved} / reported {reported}',flush=True)
+            audit.append({'theme_id':tid,'query':q,'reported_count':reported,'retrieved':retrieved,'pages':pages,'cap':MAX_PAGES_PER_QUERY*200,'truncated':truncated,'error':err})
+            print(f'  -> {retrieved} / reported {reported}; truncated={truncated}',flush=True)
     with (out/'openalex_raw.jsonl').open('w',encoding='utf-8') as f:
         for wid in sorted(records): f.write(json.dumps(records[wid],ensure_ascii=False)+'\n')
     with (out/'query_audit.csv').open('w',encoding='utf-8-sig',newline='') as f:
         w=csv.DictWriter(f,fieldnames=list(audit[0])); w.writeheader(); w.writerows(audit)
-    summary={'window':{'start':START,'cutoff':CUTOFF},'query_count':len(audit),'unique_works':len(records),'failed_queries':sum(bool(x['error']) for x in audit),'truncated_queries':sum(bool(x['truncated']) for x in audit)}
+    summary={'window':{'start':START,'cutoff':CUTOFF},'query_count':len(audit),'max_per_query':MAX_PAGES_PER_QUERY*200,'unique_works':len(records),'failed_queries':sum(bool(x['error']) for x in audit),'truncated_queries':sum(bool(x['truncated']) for x in audit)}
     (out/'raw_collection_summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding='utf-8')
     print(json.dumps(summary,ensure_ascii=False,indent=2))
     return 0 if records else 2
