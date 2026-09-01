@@ -1,0 +1,42 @@
+name: collect-ew-ai-country-theme-matrix
+
+on:
+  push:
+    branches:
+      - ew-ai-country-theme-20260901
+    paths:
+      - scripts/collect_openalex_theme.py
+      - .github/workflows/collect-ew-ai-country-theme-matrix.yml
+
+concurrency:
+  group: ew-ai-country-theme-matrix
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        theme: [K1, K2, K3, K4, K5, K6, K7, K8, K9, K10]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check requests
+      - name: Collect ${{ matrix.theme }}
+        env:
+          OPENALEX_EMAIL: masakikatoh@yahoo.ca
+        run: python scripts/collect_openalex_theme.py '${{ matrix.theme }}' "output/${{ matrix.theme }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ew-ai-country-theme-${{ matrix.theme }}
+          path: output/${{ matrix.theme }}
+          retention-days: 7
+          if-no-files-found: error
