@@ -7,7 +7,7 @@ import requests
 API = 'https://api.openalex.org/works'
 START = '2000-01-01'
 CUTOFF = '2026-09-01'
-MAX_PAGES_PER_QUERY = 20  # 4,000 works/query; truncation is recorded explicitly.
+MAX_PAGES_PER_QUERY = 5  # 1,000 relevance-ranked works/query; truncation is explicit.
 THEME_QUERIES = {
  'K1': ['machine learning spectrum sensing','deep learning spectrum sensing','radio frequency anomaly detection','spectrum situational awareness artificial intelligence','RF signal detection neural network'],
  'K2': ['radar signal deinterleaving deep learning','specific emitter identification deep learning','radio frequency fingerprinting machine learning','radar emitter identification artificial intelligence','pulse sorting neural network radar'],
@@ -36,7 +36,7 @@ def get(session, params, retries=8):
 def main():
     out=Path(sys.argv[1] if len(sys.argv)>1 else 'output'); out.mkdir(parents=True,exist_ok=True)
     email=os.getenv('OPENALEX_EMAIL','research@example.com')
-    s=requests.Session(); s.headers.update({'User-Agent':f'EW-AI-country-theme/1.1 (mailto:{email})','Accept':'application/json'})
+    s=requests.Session(); s.headers.update({'User-Agent':f'EW-AI-country-theme/1.2 (mailto:{email})','Accept':'application/json'})
     records={}; audit=[]
     for tid,queries in THEME_QUERIES.items():
         for q in queries:
@@ -63,7 +63,7 @@ def main():
                         if hit not in rec['_query_hits']: rec['_query_hits'].append(hit)
                     cursor=payload.get('meta',{}).get('next_cursor')
                     if not cursor: break
-                    time.sleep(.08)
+                    time.sleep(.05)
                 if cursor and reported is not None and retrieved < reported:
                     truncated=True
             except Exception as e:
